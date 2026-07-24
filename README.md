@@ -1,35 +1,29 @@
-# Multi-Agent 框架调研
+# Multi-Agent 调度与通信调研
 
-本仓库汇总 Multi-Agent 框架的调度、通信、状态持久化与失败恢复设计。
-当前课程以源码为依据，对比以下四个项目：
+本仓库对比四个 Multi-Agent 框架在调度对象、通信方式、执行隔离、状态所有权和故障恢复方面的设计：
 
-- AgentTeams：长期 Agent 身份与 Worker 容器生命周期
-- AgentSpace：持久化任务队列与 Daemon 执行
-- houmao：可恢复的命令行 Agent 会话
-- omnigent：按需扩展的父子 Session 树
+- AgentTeams
+- AgentSpace
+- houmao
+- omnigent
 
-## 阅读入口
+报告入口：[`docs/index.md`](docs/index.md)
 
-- [课程首页](lessons/index.html)
-- [课程目标](MISSION.md)
-- [四框架速查表](reference/multiagent-comparison.html)
-- [中文名词表](reference/glossary.html)
-- [AgentTeams 线性源码导览](walkthrough.md)
-- [调研资料索引](RESOURCES.md)
+线上版本通过 GitHub Pages 从 `docs/` 中的 Markdown 自动构建。主分支不保存生成后的 HTML。
 
-建议从课程首页开始，依次阅读共同导论、四个仓库的端到端实现课和最终综合比较。
+## 报告结构
 
-## 本地浏览
+1. [调研总览](docs/index.md)
+2. [AgentTeams：长期 Worker 生命周期](docs/agentteams.md)
+3. [AgentSpace：持久化任务队列](docs/agentspace.md)
+4. [houmao：可恢复 Agent 会话](docs/houmao.md)
+5. [omnigent：父子 Session 树](docs/omnigent.md)
+6. [横向对比与结论](docs/comparison.md)
+7. [名词解释](docs/glossary.md)
+8. [调研范围与源码版本](docs/methodology.md)
 
-直接打开 HTML 可以阅读主要内容。若要同时访问课程中链接的本地源码，需将
-`AgentTeams`、`AgentSpace`、`houmao`、`omnigent` 和本仓库放在同一个
-`playground/` 目录下，然后运行：
+源码级证据附录：[AgentTeams 线性源码导览](docs/appendix-agentteams-source-walkthrough.md)。该文件保留 Showboat 捕获的代码片段，不作为 Pages 正文构建。
 
-```bash
-docker compose -f teaching/compose.yaml up -d
-```
+## GitHub Pages
 
-默认监听 `0.0.0.0:18089`。Compose 网络不固定子网或容器 IP，由 Docker 自动
-选择空闲网段，以减少和宿主机、局域网及其他 Docker 网络冲突。
-
-更完整的启动与停止方式见 [teaching/README.md](teaching/README.md)。
+`.github/workflows/pages.yml` 在 `main` 分支更新时构建并部署站点。仓库 Pages 设置需要使用 **GitHub Actions** 作为发布来源。

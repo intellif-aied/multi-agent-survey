@@ -1,0 +1,11 @@
+title: Multi-Agent 调度与通信调研
+description: AgentTeams、AgentSpace、houmao 与 omnigent 的源码级架构对比
+lang: zh-CN
+theme: jekyll-theme-cayman
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+exclude:
+  - README.md
+  - appendix-agentteams-source-walkthrough.md
