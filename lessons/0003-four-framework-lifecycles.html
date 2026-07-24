@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第三课：houmao 如何管理可恢复的 Agent</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0003 · 约 23 分钟</p>
+  <h1>houmao<br>如何管理可恢复的 Agent</h1>
+  <p class="lede">本课只看 houmao：如何把 Claude Code、Codex 等命令行工具变成有稳定身份、独立配置、控制入口、邮箱和恢复能力的 Agent。</p>
+  <p class="meta">主线：项目定义 → 隔离配置 → 后台终端 → 运行清单 → 控制入口 / 邮箱 → 停止与恢复</p>
+
+  <aside class="callout"><strong>先记住一句话：</strong>houmao 长期保存的是“这个 Agent 如何继续运行的完整记录”；具体命令行进程可以停止和重启。</aside>
+
+  <h2>1. 它默认不是另一个聊天网站</h2>
+  <p>houmao 的典型使用方式，是让你当前正在交谈的 Claude Code、Codex 或 Kimi 成为“前台助手”。你对它说：“创建一个后端审查员并检查上次提交。”前台助手读取 Houmao Skill，再调用 <code>houmao-mgr</code> 创建和控制后台 Agent。你也可以绕过自然语言，自己直接运行同一套命令。</p>
+  <table class="comparison">
+    <thead><tr><th>角色</th><th>你看到的入口</th><th>实际职责</th></tr></thead>
+    <tbody>
+      <tr><th>人类用户</th><td>现有 Claude / Codex 终端</td><td>用自然语言提出创建、委派、查看和停止请求</td></tr>
+      <tr><th>前台 Agent</th><td>当前终端中的 Agent</td><td>理解请求，通过 Houmao Skill 调用确定性命令</td></tr>
+      <tr><th><code>houmao-mgr</code></th><td>管理 CLI</td><td>初始化项目、定义角色、启动 Agent、发任务、查看状态和恢复</td></tr>
+      <tr><th>后台 Agent</th><td>独立 tmux 会话</td><td>使用自己的配置和工作目录执行具体任务</td></tr>
+      <tr><th>Passive Server</th><td>可选 HTTP 管理入口</td><td>远程发现、观察和转发控制；本地基本使用并不依赖它</td></tr>
+    </tbody>
+  </table>
+  <aside class="callout"><strong>为什么需要 CLI：</strong>Skill 负责让模型知道“应该做什么”，<code>houmao-mgr</code> 负责把启动、停止、写清单、投递任务这些操作精确执行。CLI 同时方便人类直接排障和脚本自动化。</aside>
+
+  <h2>2. “部署”在这里主要是配置执行主机</h2>
+  <p>houmao 默认没有必须集中部署的 Web 后端。运维或个人开发者在要运行 Agent 的 Linux / macOS 主机上安装 Python 工具、<code>tmux</code>、所需的 Claude / Codex 等供应商 CLI 和凭据，再把 Houmao Skill 安装给前台 Agent：</p>
+  <pre><code>uv tool install houmao
+command -v tmux
+npx skills add igamenovoer/tool-skills/houmao</code></pre>
+  <p>项目执行后，定义和状态主要放在项目的 <code>.houmao</code> 目录及各 Agent 的运行目录。只有需要跨机器统一发现或 API 管理时，才额外启动 <code>houmao-passive-server</code>；需要邮件式异步通信时，还可部署 Stalwart 邮件服务。</p>
+  <p class="source">操作入口：houmao/README.md → src/houmao/cli.py → src/houmao/passive_server/</p>
+
+  <h2>3. 一个常见用户故事</h2>
+  <ol class="trace">
+    <li><strong>用户在自己的 Codex / Claude 中提出要求。</strong>“建立一个 Codex 后端审查员 reviewer-1，检查最近一次提交。”</li>
+    <li><strong>前台 Agent 调用 Houmao Skill。</strong>Skill 使用 <code>houmao-mgr</code> 初始化项目，选择或创建 reviewer 角色和 profile。</li>
+    <li><strong>管理 CLI 编译启动配置。</strong>它生成独立工具配置目录、启动清单和工作目录，然后在 tmux 中拉起 reviewer-1。</li>
+    <li><strong>任务进入该 Agent 的控制入口。</strong>Gateway 将请求写入 reviewer-1 自己的队列；如果使用邮箱，未读邮件也会转换成受控任务。</li>
+    <li><strong>reviewer-1 在后台运行。</strong>它使用自己的 Codex 会话查看代码并形成审查结果，不污染前台 Agent 的上下文和配置。</li>
+    <li><strong>用户查看结果或继续控制。</strong>前台 Agent 可查询状态、读取回复、追加问题、连接 tmux 人工接管，或停止后根据运行清单恢复。</li>
+  </ol>
+
+  <h2>4. 可复用角色和一次运行不是同一件事</h2>
+  <div class="two-col">
+    <article class="card">
+      <h3>项目定义</h3>
+      <p>项目目录保存 Agent 角色、模型、工具、提示词和启动偏好。它回答“以后怎样创建这种 Agent”，可以重复使用。</p>
+    </article>
+    <article class="card">
+      <h3>运行会话</h3>
+      <p>一次实际启动后的 Agent，拥有自己的工作目录、工具配置、后台终端、当前会话标识和运行状态。</p>
+    </article>
+  </div>
+  <p>命令 <code>houmao-mgr</code> 先从项目目录读取角色定义，再将它编译成一次具体启动。配置的长期来源和进程的当前状态因此分开保存。</p>
+
+  <h2>5. 启动前先生成隔离的工具环境</h2>
+  <p>不同 Agent 不应该共用同一套 Claude Code 或 Codex 配置，否则模型、认证、技能和会话文件可能互相污染。houmao 为每个 Agent 生成<a class="term" href="../reference/glossary.html#provider-home">专用工具配置目录（Provider Home）</a>。</p>
+  <ol class="trace">
+    <li><strong>读取角色和项目覆盖配置。</strong>项目可以在通用角色上修改模型、工作目录或启动参数。</li>
+    <li><strong>构建工具配置目录。</strong>写入 Claude Code、Codex 等程序需要的设置、技能和环境变量。</li>
+    <li><strong>生成 Brain Manifest。</strong>这是“本次应该如何启动 Agent”的结构化清单。</li>
+    <li><strong>解析 Launch Plan。</strong>将清单变成最终命令、参数、环境和工作目录。</li>
+  </ol>
+  <p class="source">源码入口：src/houmao/agents/brain_builder.py → realm_controller/launch_plan.py</p>
+
+  <h2>6. 稳定后台终端承载 Agent</h2>
+  <p>houmao 使用<a class="term" href="../reference/glossary.html#tmux">tmux 后台终端窗口</a>为每个 Agent 提供稳定的运行位置。操作者退出当前终端后，Agent 仍可以继续运行；之后也能重新连接查看。</p>
+  <table class="comparison">
+    <thead><tr><th>运行方式</th><th>进程行为</th><th>适合场景</th></tr></thead>
+    <tbody>
+      <tr><th>交互界面模式</th><td>Claude Code、Codex 等界面长期留在稳定 tmux 窗口</td><td>人工随时接管、观察和继续对话</td></tr>
+      <tr><th>无界面自动模式</th><td>保留稳定会话位置，但每轮任务启动一个命令行进程</td><td>后台自动执行、记录结构化输出</td></tr>
+    </tbody>
+  </table>
+  <p class="source">源码入口：realm_controller/backends/tmux_runtime.py → headless_base.py</p>
+
+  <h2>7. 运行清单是恢复的依据</h2>
+  <p><a class="term" href="../reference/glossary.html#manifest">会话运行清单（Session Manifest）</a>记录 Agent 使用的配置、工作目录、后台终端名称、模型工具会话标识和控制入口。每次发送任务、停止或恢复后，运行控制器都会更新它。</p>
+  <p>因此，houmao 不把“当前 Python 对象”当作唯一事实来源。管理进程重启后，仍可根据清单找到并继续控制 Agent。</p>
+  <div class="flow-stack">
+    <div class="flow-step">启动 Agent → 写入首次运行清单</div>
+    <div class="flow-step">执行一轮 → 更新模型工具的会话标识和结果</div>
+    <div class="flow-step">停止进程 → 保留最终状态和恢复信息</div>
+    <div class="flow-step">重新启动 → 校验清单并恢复稳定运行位置</div>
+  </div>
+  <p class="source">源码入口：src/houmao/agents/realm_controller/runtime.py → RuntimeSessionController</p>
+
+  <section class="quiz" data-quiz
+    data-correct-feedback="正确。运行清单把 Agent 身份和恢复信息从当前进程内存中独立出来。"
+    data-wrong-feedback="tmux 保持终端位置，但真正描述如何恢复的是持久化运行清单。">
+    <h3>快速检索 ①</h3>
+    <p>管理进程重启后，houmao 主要根据什么重新找到 Agent 的运行信息？</p>
+    <div class="quiz-options">
+      <button type="button" data-answer>当前 Python 对象</button>
+      <button type="button" data-answer data-correct="true">持久化运行清单</button>
+      <button type="button" data-answer>模型自动回忆</button>
+    </div>
+    <p class="feedback" data-feedback aria-live="polite"></p>
+  </section>
+
+  <h2>8. 每个 Agent 都有自己的请求入口</h2>
+  <p>houmao 可以为一个已启动 Agent 附加<a class="term" href="../reference/glossary.html#gateway">单 Agent 控制入口（Gateway）</a>。它不是全局调度中心，只负责当前 Agent：</p>
+  <ul>
+    <li>检查 Agent 当前是否可以接收新任务；</li>
+    <li>把请求写入该 Agent 自己的 SQLite 队列；</li>
+    <li>按顺序执行，避免同一 Agent 同时处理冲突请求；</li>
+    <li>记录请求事件和当前执行状态；</li>
+    <li>用“运行实例编号”避免旧请求误投到重启后的新实例。</li>
+  </ul>
+  <p class="source">源码入口：realm_controller/gateway_storage.py → gateway_service.py</p>
+
+  <h2>9. Agent 之间通过邮箱异步通信</h2>
+  <p><a class="term" href="../reference/glossary.html#mailbox">Agent 邮箱（Mailbox）</a>可以使用本地文件目录，也可以使用 Stalwart 邮件服务。发送方投递后不需要等待接收方同时在线。</p>
+  <p>控制入口会检查未读邮件，把邮件内容渲染成有长度限制的唤醒任务，再经过同样的“是否可接任务”和排队规则交给 Agent。邮件不会绕过控制入口直接写进正在运行的模型。</p>
+  <p class="source">源码入口：agents/mailbox_runtime_support.py → realm_controller/gateway_mailbox.py</p>
+
+  <h2>10. 登记表和只读服务负责发现，不负责接管</h2>
+  <p><a class="term" href="../reference/glossary.html#registry">在线 Agent 登记表（Shared Registry）</a>记录 Agent 身份、运行清单位置、在线期限和控制地址。只读服务可以通过登记表发现 Agent，再把控制请求转发给对应 Gateway。</p>
+  <p>状态所有权仍在 Agent 自己的运行清单和 Gateway 中。发现服务只负责“找到谁”，不会变成新的中央运行状态来源。</p>
+
+  <section class="quiz" data-quiz
+    data-correct-feedback="正确。Gateway 只控制一个 Agent，多 Agent 通过各自入口和邮箱协作。"
+    data-wrong-feedback="Gateway 路径位于每个运行会话下面，不是一个全局任务队列。">
+    <h3>快速检索 ②</h3>
+    <p>houmao 的 Gateway 是否是管理所有 Agent 的中央任务调度器？</p>
+    <div class="quiz-options">
+      <button type="button" data-answer>是，全局只有一个</button>
+      <button type="button" data-answer data-correct="true">不是，每个 Agent 各自拥有</button>
+      <button type="button" data-answer>只有 Codex 使用</button>
+    </div>
+    <p class="feedback" data-feedback aria-live="polite"></p>
+  </section>
+
+  <h2>11. 运维怎样端到端排查</h2>
+  <p>先确认 <code>tmux</code> 和目标供应商 CLI 能运行，再检查项目定义与凭据、<code>houmao-mgr agents list</code> 的登记信息、运行清单中的 tmux 名称和工作目录、Gateway 状态与请求队列，最后再看邮箱投递。这里通常没有一个中央 Controller 可以替你重建所有环境；执行主机上的清单和进程才是关键证据。</p>
+
+  <aside class="callout"><strong>请把答案发给我：</strong>为什么 houmao 同时需要 tmux、运行清单和在线登记表？分别去掉其中一个，会失去什么能力？</aside>
+
+  <footer>
+    <a href="0004-omnigent-session-tree.html">下一课：omnigent 实现</a> ·
+    <a href="0002-agentspace-cross-comparison.html">上一课：AgentSpace</a> ·
+    <a href="../reference/glossary.html">名词表</a> ·
+    源码导览位于本机 <code>../houmao/walkthrough.md</code>
+  </footer>
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

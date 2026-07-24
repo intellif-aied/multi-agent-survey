@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Agent 课程名词表</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Reference · Plain-language glossary</p>
+  <h1>名词表：先说人话，再对源码名</h1>
+  <p class="lede">正文优先使用普通中文。这里保留英文和源码名称，是为了让你能用 <code>rg</code> 搜到真实实现，而不是要求你先背术语。</p>
+
+  <h2>共同角色</h2>
+  <dl class="glossary">
+    <div id="agent"><dt>Agent</dt><dd>能读取上下文、调用模型和工具并完成任务的程序角色。它可能长期在线，也可能只为一项任务临时启动。</dd></div>
+    <div id="manager"><dt>Manager / Lead Agent</dt><dd>负责理解总目标、拆分任务、选择其他 Agent 并汇总结果的协调者。它通常也是一个 Agent，不等同于负责启动容器的系统服务。</dd></div>
+    <div id="worker"><dt>Worker</dt><dd>接受委派并执行具体工作的 Agent。在 AgentTeams 中，Worker 既有逻辑身份，也可能对应一个长期运行或休眠的容器。</dd></div>
+    <div id="employee"><dt>Employee</dt><dd>AgentSpace 中的逻辑 Agent 身份，类似系统里的“虚拟员工”。它不必对应一个始终运行的进程，需要通过执行环境绑定才能自动执行任务。</dd></div>
+  </dl>
+
+  <h2>AgentTeams 与 Kubernetes</h2>
+  <dl class="glossary">
+    <div id="kubernetes"><dt>Kubernetes</dt><dd>管理多台机器上容器的系统。你可以把它理解成比 Docker Engine 更高一层的容器调度与自愈平台。</dd></div>
+    <div id="worker-cr"><dt>Worker 配置记录（Worker CR）</dt><dd>AgentTeams 存在 Kubernetes 里的一个自定义配置对象。它像一条数据库记录：<code>spec</code> 写“希望 Worker 是什么样”，<code>status</code> 写“现在实际怎么样”。CR 是 Custom Resource 的缩写。</dd></div>
+    <div id="controller"><dt>持续检查程序（Controller）</dt><dd>一直观察配置记录和真实容器的后台程序。发现两边不一致，就执行创建、启动、停止或更新。</dd></div>
+    <div id="reconcile"><dt>对齐检查（Reconcile）</dt><dd>Controller 每次执行的一轮检查：读取希望状态，查看实际状态，然后缩小差异。它必须能安全地重复执行。</dd></div>
+    <div id="backend"><dt>运行环境驱动（Backend）</dt><dd>把“启动这个 Worker”的统一请求翻译成具体操作，例如调用 Docker 创建容器，或调用 Kubernetes 创建 Pod。</dd></div>
+    <div id="pod"><dt>Pod</dt><dd>Kubernetes 调度容器的最小单位。对只熟悉 Docker 的读者，可以先把它理解成“由 Kubernetes 管理的一组紧密相关容器”。本课程大多数场景里，一个 Worker 对应一个 Pod。</dd></div>
+    <div id="runtime"><dt>Agent 运行程序（Runtime）</dt><dd>容器里真正等待消息、调用模型和工具、执行任务的程序，例如 OpenClaw、CoPaw 或某个命令行 Agent。</dd></div>
+    <div id="matrix"><dt>Matrix</dt><dd>一种开放聊天协议。AgentTeams 把 Human、Manager 和 Worker 放进聊天房间，用房间消息指派任务、汇报进度和人工介入。</dd></div>
+    <div id="object-storage"><dt>对象存储（MinIO / OSS）</dt><dd>通过“桶 + 路径”保存文件的服务，类似可通过网络访问的持久文件仓库。容器删除后，配置、技能和任务文件仍能保留。</dd></div>
+  </dl>
+
+  <h2>任务执行与适配</h2>
+  <dl class="glossary">
+    <div id="daemon"><dt>常驻执行服务（Daemon）</dt><dd>一直在后台运行、定期领取任务的进程。AgentSpace 的 Daemon 本身不决定业务任务，它负责找到可执行工作并启动合适的 Agent 命令。</dd></div>
+    <div id="claim"><dt>事务领取（claim）</dt><dd>用一次数据库事务把任务从“等待中”改为“已被我领取”。如果两个 Daemon 同时尝试，只有一个能成功，从而避免重复执行。</dd></div>
+    <div id="binding"><dt>执行环境绑定（runtime binding）</dt><dd>一条映射关系，说明某个逻辑 Employee 应由哪种 Runtime 执行。没有绑定时，协作任务可以存在，但系统不知道该启动谁来做。</dd></div>
+    <div id="harness"><dt>Agent 启动适配器（Harness）</dt><dd>把 Claude Code、Codex 等不同命令行 Agent 包成统一可启动、可传消息、可收结果的接口。它不是模型本身，而是平台与模型客户端之间的适配层。</dd></div>
+    <div id="agent-router"><dt>执行器路由层（AgentRouter）</dt><dd>接收统一任务请求，判断应该使用哪个 Harness，再把不同工具的输出整理成统一事件。</dd></div>
+    <div id="session"><dt>连续会话（Session）</dt><dd>一次可持续多轮的 Agent 对话和执行记录。它通常包含历史消息、所用执行器、工作目录以及恢复下一轮所需的标识。</dd></div>
+  </dl>
+
+  <h2>houmao</h2>
+  <dl class="glossary">
+    <div id="manifest"><dt>运行清单文件（Manifest）</dt><dd>记录“这个 Agent 如何启动、工作目录在哪里、当前会话是谁”的结构化文件。进程停止后，系统可以根据它恢复运行。</dd></div>
+    <div id="provider-home"><dt>隔离的工具配置目录（Provider Home）</dt><dd>专门给某个 Agent 准备的 Claude Code、Codex 等工具配置目录，避免多个 Agent 共用并互相污染配置。</dd></div>
+    <div id="tmux"><dt>tmux 运行窗口</dt><dd>Linux 终端会话管理工具。进程可以在后台窗口中持续运行，操作者之后还能重新连接查看。houmao 用稳定的 tmux 窗口承载 Agent。</dd></div>
+    <div id="gateway"><dt>单 Agent 控制入口（Per-Agent Gateway）</dt><dd>houmao 为每个已启动 Agent 提供的请求入口。它接收提示、排队、检查 Agent 是否可用，然后按顺序交给该 Agent。</dd></div>
+    <div id="mailbox"><dt>Agent 邮箱（Mailbox）</dt><dd>Agent 之间发送异步消息的收件箱。接收方不必和发送方同时执行；未读邮件可以在合适时机唤醒接收方。</dd></div>
+    <div id="registry"><dt>在线 Agent 登记表（Shared Registry）</dt><dd>记录哪些 Agent 存在、是否在线、如何找到其运行清单和控制入口。它用于发现，不替代 Agent 自己的运行状态。</dd></div>
+  </dl>
+
+  <h2>omnigent</h2>
+  <dl class="glossary">
+    <div id="agent-spec"><dt>Agent 定义（AgentSpec）</dt><dd>描述一个 Agent 使用哪个 Harness、有哪些提示词、工具权限和可调用子 Agent 的配置。</dd></div>
+    <div id="runner"><dt>本机执行服务（Runner）</dt><dd>运行在某台主机上的服务，负责准备工作目录、启动 Harness、管理进程和执行本机工具。Server 保存全局会话状态，Runner 负责真正落地执行。</dd></div>
+    <div id="child-session"><dt>子 Agent 会话（Child Session）</dt><dd>父 Agent 委派任务时创建的独立会话。它有自己的 Harness、上下文和历史，完成后把结果送回父会话。</dd></div>
+    <div id="inbox"><dt>父会话结果箱（Inbox）</dt><dd>父 Agent 接收异步子任务结果的队列。子 Agent 做完后写入 Inbox，父 Agent 再读取并继续推理。</dd></div>
+    <div id="mcp"><dt>工具连接协议（MCP）</dt><dd>Model Context Protocol 的缩写。平台用统一协议把“创建子会话、搜索、读文件”等工具提供给 Claude Code、Codex 等 Agent 客户端。</dd></div>
+    <div id="active-turn"><dt>正在执行的一轮（Active Turn）</dt><dd>一个 Session 当前正在处理的一条输入。omnigent 限制同一 Session 同时只有一轮执行，多个 Child Session 则可以并行。</dd></div>
+  </dl>
+
+  <footer>
+    <a href="../lessons/">返回课程首页</a> ·
+    <a href="multiagent-comparison.html">四框架速查表</a>
+  </footer>
+</main>
+</body>
+</html>

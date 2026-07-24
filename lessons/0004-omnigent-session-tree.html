@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第四课：omnigent 如何生成父子 Agent 会话树</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0004 · 约 24 分钟</p>
+  <h1>omnigent<br>如何生成父子 Agent 会话树</h1>
+  <p class="lede">本课只看 omnigent：一个根 Agent 如何通过工具委派任务，按需创建使用不同执行器的子 Agent，并异步取回结果。</p>
+  <p class="meta">主线：Agent 定义 → 根会话 → Server / Runner → 子会话 → 结果箱</p>
+
+  <aside class="callout"><strong>先记住一句话：</strong>omnigent 把每个 Agent 运行实例表示成一个独立会话；多个 Agent 就是由父子关系连接起来的一棵会话树。</aside>
+
+  <h2>1. 用户可以从 Web 进入，也可以直接用 CLI</h2>
+  <p>个人本机体验时，运行 <code>omnigent</code> 就能选择模型、创建会话并打开本地 Web UI（默认 <code>http://localhost:6767</code>）；也可以执行 <code>omnigent claude</code> 或 <code>omnigent codex</code>，直接进入原生命令行 Agent。要运行仓库中已经打包好的多 Agent 定义，可以使用 <code>omnigent run examples/polly/</code>。</p>
+  <p>因此 <code>omnigent</code> CLI 不只是管理员工具。它同时承担首次安装和登录、本地产品启动、直接运行 Agent、连接远程 Server、启动执行主机以及附加已有会话等职责；浏览器则更适合查看会话树、事件和协作状态。</p>
+  <table class="comparison">
+    <thead><tr><th>角色 / 程序</th><th>入口</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><th>普通用户</th><td>Web UI 或 <code>omnigent</code> CLI</td><td>选择 Agent、创建会话、发送任务、查看父子执行树</td></tr>
+      <tr><th>Server</th><td>中央 HTTP / 事件服务</td><td>保存用户、Agent 定义、会话树、事件、文件和权限</td></tr>
+      <tr><th>Host</th><td><code>omnigent host</code></td><td>让一台有代码、工具和凭据的机器上线成为执行主机</td></tr>
+      <tr><th>Runner</th><td>Host 内部执行服务</td><td>为会话准备目录，启动 Claude、Codex 等 Harness</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. 运维怎样部署：中央 Server 和执行主机分开</h2>
+  <div class="two-col">
+    <article class="card">
+      <h3>单机体验</h3>
+      <p>安装 <code>omnigent</code> 后运行 <code>omnigent server start</code>，再运行 <code>omnigent host</code>。Server 保存状态，Host / Runner 在本机实际启动 Agent。也可以直接运行 <code>omnigent</code> 使用整合的本地流程。</p>
+    </article>
+    <article class="card">
+      <h3>团队或远程部署</h3>
+      <p>运维用仓库 <code>deploy/</code> 下的 Docker Compose 部署 Server；开发者电脑无需暴露入站端口，只需 <code>omnigent login https://your-host</code> 后运行 <code>omnigent host https://your-host</code>，由 Host 主动连向 Server。</p>
+    </article>
+  </div>
+  <aside class="callout"><strong>关键部署边界：</strong>Server 在线只代表会话和网页可用。要在某台机器的仓库中真正运行 Codex / Claude，那台机器还必须有在线 Host、对应 CLI、凭据和代码目录。</aside>
+  <p class="source">操作入口：omnigent/README.md → omnigent/deploy/README.md</p>
+
+  <h2>3. 一个常见用户故事</h2>
+  <ol class="trace">
+    <li><strong>运维部署 Server，开发者启动 Host。</strong>Server 负责公共状态，Host 报告自己可执行哪些 Harness。</li>
+    <li><strong>用户在 Web 中选择 Polly 等多 Agent 定义并创建根会话。</strong>输入例如“分析这个功能并分别给出实现和测试建议”。</li>
+    <li><strong>Server 保存根 Session 并路由到在线 Host。</strong>Runner 在目标机器准备工作目录，启动根 Agent 的 Harness。</li>
+    <li><strong>根 Agent 自己拆分任务。</strong>它调用 <code>sys_session_send</code> 委派给允许的 Codex 或 Claude 子 Agent；第一次委派会创建独立子 Session。</li>
+    <li><strong>多个子 Session 独立执行。</strong>它们可以使用不同 Harness 和上下文，进度事件持续回到 Server，Web 中显示为一棵树。</li>
+    <li><strong>结果进入根会话的 Inbox。</strong>根 Agent 用 <code>sys_read_inbox</code> 读取各子任务结果，汇总后回复用户；Server 保存整棵树供追踪和恢复。</li>
+  </ol>
+
+  <h2>4. 五个对象先分工</h2>
+  <table class="comparison">
+    <thead><tr><th>对象</th><th>普通中文含义</th><th>主要职责</th></tr></thead>
+    <tbody>
+      <tr><th><a class="term" href="../reference/glossary.html#agent-spec">AgentSpec</a></th><td>Agent 定义</td><td>声明提示词、工具权限、使用哪个执行器、允许调用哪些子 Agent</td></tr>
+      <tr><th><a class="term" href="../reference/glossary.html#session">Session</a></th><td>一次连续 Agent 会话</td><td>保存消息历史、状态、父子关系和这次运行使用的 Agent 定义</td></tr>
+      <tr><th>Server</th><td>中央状态服务</td><td>保存会话树、权限、事件、文件和产物，并把本机工作路由给 Runner</td></tr>
+      <tr><th><a class="term" href="../reference/glossary.html#runner">Runner</a></th><td>本机执行服务</td><td>准备工作目录，启动命令行或程序接口 Agent，执行本机工具</td></tr>
+      <tr><th><a class="term" href="../reference/glossary.html#harness">Harness</a></th><td>Agent 启动适配器</td><td>统一 Claude Code、Codex 和其他 Agent 客户端的启动、输入和输出</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. 根 Agent 怎样启动</h2>
+  <ol class="trace">
+    <li><strong>用户选择一个 Agent 定义并创建根会话。</strong>Server 先保存会话记录、所有者和 Agent 配置。</li>
+    <li><strong>会话绑定某个在线 Runner。</strong>这决定工作实际落在哪台主机执行。</li>
+    <li><strong>Runner 准备工作目录和文件。</strong>不同会话可以共享项目，也可以使用隔离目录。</li>
+    <li><strong>Runner 根据 Agent 定义选择 Harness。</strong>例如启动 Claude Code、Codex，或直接通过程序接口调用模型。</li>
+    <li><strong>第一条消息进入会话事件流。</strong>Harness 开始推理并决定是否调用工具或创建子 Agent。</li>
+  </ol>
+  <p class="source">源码入口：server/routes/sessions.py → host/connect.py → runner/app.py</p>
+
+  <h2>6. 原生命令行 Agent 和程序接口 Agent 接工具的方式不同</h2>
+  <div class="two-col">
+    <article class="card">
+      <h3>程序接口 Agent</h3>
+      <p>Runner 自己构造模型请求，因此可以直接把工具说明放进请求，并在收到工具调用后执行。</p>
+    </article>
+    <article class="card">
+      <h3>Claude Code / Codex 等原生客户端</h3>
+      <p>Runner 不能随意改写它们内部的每次模型请求，所以通过启动配置、终端桥接、技能和<a class="term" href="../reference/glossary.html#mcp">工具连接协议（MCP）</a>提供平台工具。</p>
+    </article>
+  </div>
+  <p>不同 Harness 不需要理解彼此内部协议。它们只需要在各自一侧理解 omnigent 提供的会话事件和工具接口。</p>
+
+  <h2>7. 第一次委派时按需创建子会话</h2>
+  <p>父 Agent 调用 <code>sys_session_send</code>，表达“把这项工作交给名为 codex 的逻辑子 Agent”。这个工具不是简单地向某个进程写字符串，而是完整的子 Agent 调度入口。</p>
+  <div class="flow-stack">
+    <div class="flow-step warm">父 Harness 调用 <code>sys_session_send(agent="codex")</code></div>
+    <div class="flow-step warm">Runner 检查父 Agent 是否允许调用这个子 Agent</div>
+    <div class="flow-step warm">查找是否已有同名、同标题的直接子会话</div>
+    <div class="flow-step warm">没有则请求 Server 创建，并写入父会话编号和同一 Runner</div>
+    <div class="flow-step warm">根据子 Agent 定义启动 Codex Harness 并投递第一条消息</div>
+  </div>
+  <p>后续向同一子任务发送消息时，系统复用已有子会话，保留上下文。父 Agent 也可以直接使用子会话编号继续对话，但只能控制自己的直接子节点。</p>
+  <p class="source">源码入口：tools/builtins/spawn.py → runner/tool_dispatch.py → server/routes/sessions.py</p>
+
+  <section class="quiz" data-quiz
+    data-correct-feedback="正确。第一次 send 可以创建子会话，后续 send 复用它。"
+    data-wrong-feedback="sys_session_send 管理的是会话，而不只是终端输入。">
+    <h3>快速检索 ①</h3>
+    <p>父 Agent 第一次向一个逻辑子 Agent 发送任务时，可能发生什么？</p>
+    <div class="quiz-options">
+      <button type="button" data-answer>只向父进程写字符串</button>
+      <button type="button" data-answer data-correct="true">创建独立子会话并启动执行器</button>
+      <button type="button" data-answer>修改父 Agent 的模型</button>
+    </div>
+    <p class="feedback" data-feedback aria-live="polite"></p>
+  </section>
+
+  <h2>8. 子任务异步执行，结果回到父会话结果箱</h2>
+  <p><code>sys_session_send</code> 不等待子 Agent 完成，而是立即返回一个异步任务标识。子 Agent 在自己的会话中独立工作，拥有自己的上下文、历史和执行进程。</p>
+  <p>完成、失败或取消后，Runner 把结果写入父会话的<a class="term" href="../reference/glossary.html#inbox">结果箱（Inbox）</a>。父 Agent 调用 <code>sys_read_inbox</code> 读取结果，再继续推理和汇总。</p>
+  <div class="mental-model" aria-label="omnigent 子任务回传">
+    <div class="node warm">父 Agent<span class="arrow">委派</span></div>
+    <div class="node">子 Session<span class="arrow">独立执行</span></div>
+    <div class="node">Inbox<span class="arrow">保存完成结果</span></div>
+    <div class="node warm">父 Agent<span class="arrow">读取并汇总</span></div>
+  </div>
+
+  <h2>9. 为什么它是一棵树，而不是任意 Agent 互发消息</h2>
+  <p>每个子会话保存 <code>parent_session_id</code> 和根会话编号。父 Agent 默认只能创建、继续、查看或停止自己的直接子会话。这条边界让 Server 能检查权限、统计成本、显示运行树，也避免任意会话跨用户控制。</p>
+  <p>如果某个子 Agent 的定义也允许调用子 Agent，它可以继续创建下一层，于是形成多层树。递归能力来自配置授权，不是所有 Agent 自动拥有。</p>
+
+  <h2>10. 同一会话串行，不同子会话可以并行</h2>
+  <p>同一 Session 同时只处理<a class="term" href="../reference/glossary.html#active-turn">一轮正在执行的输入</a>，新消息按顺序处理或安全注入。多个 Child Session 是不同执行单元，所以可以并行使用不同 Harness。</p>
+  <p>Server 持久保存会话和事件，Runner 管理实际进程。Runner 断开时会话记录不会消失；重新绑定可用执行主机后，可以根据会话状态重新启动 Harness。</p>
+
+  <section class="quiz" data-quiz
+    data-correct-feedback="正确。Root Harness 可以是逻辑负责人，Runner 只负责落地执行。"
+    data-wrong-feedback="Runner 管理进程和工具，但不运行一个隐藏模型来统一拆任务。">
+    <h3>快速检索 ②</h3>
+    <p>omnigent 是否额外运行一个隐藏的中央 Lead LLM 来指挥所有子 Agent？</p>
+    <div class="quiz-options">
+      <button type="button" data-answer>始终存在</button>
+      <button type="button" data-answer data-correct="true">不存在，根 Agent 可承担 Lead</button>
+      <button type="button" data-answer>Runner 就是 Lead LLM</button>
+    </div>
+    <p class="feedback" data-feedback aria-live="polite"></p>
+  </section>
+
+  <h2>11. 运维怎样端到端排查</h2>
+  <p>按这条链检查：Server 健康、数据库和登录是否正常 → Web 中是否有在线 Host → 目标 Session 绑定了哪个 Runner → 那台机器是否安装对应 Harness CLI 和凭据 → 根会话是否产生子会话 → 子会话事件是否结束 → 结果是否写入父会话 Inbox。网页能打开并不等于执行主机已经就绪。</p>
+
+  <aside class="callout"><strong>请把答案发给我：</strong>为什么 omnigent 需要同时保存父子会话关系和父会话 Inbox？只保留其中一个，会缺少什么？</aside>
+
+  <footer>
+    <a href="0005-final-synthesis.html">下一课：四框架综合比较</a> ·
+    <a href="0003-four-framework-lifecycles.html">上一课：houmao</a> ·
+    <a href="../reference/glossary.html">名词表</a> ·
+    源码分析位于本机 <code>../omnigent/multi-agent.md</code>
+  </footer>
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
