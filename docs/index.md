@@ -13,7 +13,7 @@ title: Multi-Agent 调度与通信调研
 
 | 项目 | 主要调度对象 | 最接近的工程类比 | 主要使用入口 |
 | --- | --- | --- | --- |
-| AgentTeams | 长期 Agent 身份及其 Worker 容器或 Pod | 面向 Agent 的 Kubernetes Operator | Element Web / Matrix |
+| AgentTeams | Matrix 房间中的 Manager、Team Leader 与 Worker | 多 Agent 聊天协作产品 + 容器生命周期管理 | Element Web / Matrix |
 | AgentSpace | 可领取、可重试的业务任务 | 带 Agent 执行器的任务队列 | Web 频道、任务与审批 |
 | houmao | 可停止、恢复和人工接管的命令行 Agent 会话 | Agent 会话进程管理器 | 现有 Codex / Claude 终端与 CLI |
 | omnigent | 按委派动态扩展的父子 Session 树 | 带执行主机的会话编排服务 | Web UI 与 `omnigent` CLI |
@@ -55,7 +55,7 @@ title: Multi-Agent 调度与通信调研
 
 ## 报告导航
 
-- [AgentTeams：长期 Worker 生命周期](agentteams.md)
+- [AgentTeams：Matrix 协作与 Agent Runtime 编排](agentteams.md)
 - [AgentSpace：持久化任务队列](agentspace.md)
 - [houmao：可恢复 Agent 会话](houmao.md)
 - [omnigent：父子 Session 树](omnigent.md)

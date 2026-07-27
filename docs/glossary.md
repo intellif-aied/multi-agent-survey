@@ -45,6 +45,21 @@ Kubernetes 调度容器的最小单位，可以近似理解为由 Kubernetes 管
 **Matrix**
 开放聊天协议。AgentTeams 用房间事件传递指令、问题、进度和人工干预。
 
+**Element Web**
+Matrix 的浏览器聊天客户端。它负责显示联系人、房间和消息，不执行 Agent，也不保存 Worker 的运行状态。
+
+**Tuwunel（Matrix Homeserver）**
+AgentTeams 自带的 Matrix 服务端。它管理账号、房间成员和消息时间线；Element、Manager 和 Worker 都作为客户端连接它。
+
+**Matrix Room**
+具有独立成员、权限和消息时间线的聊天室。AgentTeams 用不同 Room 划分 Human、Manager、Team Leader 与 Worker 的通信和权限边界。
+
+**结构化 @mention（`m.mentions`）**
+Matrix 消息中机器可读取的“这条消息明确叫谁”的字段。AgentTeams 的群聊 Agent 通常只有被正确 mention 才处理消息；休眠 Worker 也可以因此被唤醒。
+
+**Higress**
+AgentTeams 的模型与工具网关。Worker 拿自己的访问令牌调用它，由网关检查权限并代为使用真正的模型或 MCP 服务凭证。
+
 **对象存储**
 通过桶和对象路径保存文件的网络服务，例如 MinIO 或 OSS。容器删除后，配置、技能、任务和结果仍可保留。
 
